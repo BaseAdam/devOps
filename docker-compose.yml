@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  web_service:
+    build: .
+    ports:
+      - 3000:3000
+    environment:
+      PORT: 3000
+      MONGODB_URI: mongodb://mongo_db:27017
+      DB_NAME: mongo_db
+    depends_on:
+      - mongo_db
+
+  mongo_db:
+    image: mongo:latest
+    container_name: mongo_db
+    ports:
+      - 27017:27017
+    volumes:
+      - mongo_data:/data/db
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - 3010:3000
+    volumes:
+      - ./grafana:/etc/grafana/provisioning/datasources
+    restart: unless-stopped
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - 9100:9100
+    restart: unless-stopped
+
+  cadvisor:
+    image: google/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - 8080:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    privileged: true
+    restart: unless-stopped
+  
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40.0
+    container_name: mongodb_exporter
+    command: 
+      - '--mongodb.global-conn-pool'
+      - '--collector.diagnosticdata'
+      - '--discovering-mode'
+      - '--compatible-mode'
+    ports:
+      - 9216:9216
+    environment:
+      WAIT_HOSTS: mongo_db:27017
+      MONGODB_URI: mongodb://mongo_db:27017
+    restart: unless-stopped
+    
+volumes:
+  mongo_data: 
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
